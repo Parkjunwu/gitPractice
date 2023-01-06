@@ -1,0 +1,185 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  // 이거 AWS Elastic Beanstalk 때문에 넣음. 로컬에서 혹시 안되면 확인
+  binaryTargets = ["native", "linux-arm64-openssl-1.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 혹시 필드 추가할 때 이름 똑같은 필드면 먼저 !!!@@@@지우고@@@!!! migrate 한 다음에 확인하고 !!!!다시 추가해라!!!! 좆된다.
+// https://www.prisma.io/docs/concepts/components/prisma-client/working-with-prismaclient/use-custom-model-and-field-names#using-map-and-map-to-rename-fields-and-models-in-the-prisma-client-api
+
+// 만약에 Diary 이런거에 Comment 넣을 거면 DiaryComment 이런 식으로 model 작성. 다른 데에 Comment 또 들어가면 헷갈림.
+
+model User {
+  id       Int    @id @default(autoincrement())
+  // 실제 이름
+  // realName String?
+  // 앱에서 쓸 이름
+  userName String @unique
+  email    String @unique
+  password String
+
+  avatar String?
+  // petLogs                     PetLog[]
+  // petLogLikes                 PetLogLike[]
+  // petLogComments              PetLogComment[]
+  // petLogCommentLikes          PetLogCommentLike[]
+  // petLogCommentOfComments     PetLogCommentOfComment[]
+  // petLogCommentOfCommentLikes PetLogCommentOfCommentLike[]
+
+  // push notification 위한 디바이스 토큰. 아직은 기기 하나만. @unique 로 해놔야 한기기에서 두사람의 알림을 받지 못할듯? 옵션으로 지정해서 유저가 알림 싫으면 안받도록. 로그아웃하면 삭제해야 하기도 하고.
+  deviceToken String? @unique
+
+  // followers following 헷갈리니까 이름을 바꿀까
+  // followers User[]   @relation("FollowRelation", references: [id])
+  // following User[]   @relation("FollowRelation", references: [id])
+  createdAt DateTime @default(now())
+  // updatedAt DateTime @updatedAt
+
+  diarys                 Diary[]
+  // pubNotifications Notification[]
+  // lastNotificationReadTime Int     @default(0) 
+  // 어차피 마지막 애 id 이후 애만 세서 가져올 거니까 마지막 id 만 받으면 되겠네
+  lastReadNotificationId Int        @default(0)
+  // 들어올 때마다 전체 조회해서 받는거 보단 이게 나을듯. 안쓰면 걍 삭제해도 되고.
+  // 만약에 삭제할거면 deleteDiary, uploadDiary, synchronizeDiary, logInUser 전체 변경
+  totalDiary             Int        @default(0)
+  // 만약에 23년 이후 출시면 y22 걍 빼
+  y22                    Y22?
+  y23                    Y23?
+  beforeY22              BeforeY22?
+
+  ytIdArr Json?
+}
+
+// 알림 내용
+model Notification {
+  id              Int      @id @default(autoincrement())
+  // 보낸 유저, 받는 유저 따로. 받는 유저는 없을 수도 있음
+  // 근데 받는 유저는 굳이 연결 안하고 id 만 있어도 되겠네.
+  // publishUser        User              @relation(fields: [publishUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  // publishUserId      Int
+  // following 유저가 포스팅 한거는 받는 유저가 정해져 있지 않아. 글고 만약에 알림에 포스팅 사진, 내용 같이 보여줄거면 이미지, 내용 요소도 추가
+  // 나중에 follower 이런거 들어가면 애매해지니까 그냥 subscribeUserId 로 음악 선정된거 알림 보내. which 도 넣어 그냥
+  subscribeUserId Int?
+  which           String
+  // read 말고 그냥 user 에 읽은 시간 넣고 그 이후는 다 읽었다 하면 될듯. message 가 아니니까
+  // read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  diaryId         Int?
+}
+
+// 회원가입 이메일 확인용 token 임. 그냥 Token 이라 하면 헷갈리니까 이렇게 씀.
+model TokenForCreateAccount {
+  id        Int      @id @default(autoincrement())
+  payload   String   @unique
+  email     String   @unique
+  password  String
+  userName  String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Diary 혹은 BaseDiary ?
+model Diary {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId      Int
+  title       String
+  file        Json // String[] 배열은 mysql 에서 못씀
+  body        Json // String[] 배열은 mysql 에서 못씀
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  thumbNail   String?
+  summaryBody String?
+  // 차단도 추가. 해시태그?
+  // 얘네 추가할 때 데이터 다 지우고 만들어 아님 ? 로 넣던지
+  // likes     PetLogLike[]
+  // comments  PetLogComment[]
+  // accused   PetLogAccused[]
+  // musicUrl  String?
+
+  // music     Music?   @relation(fields: [musicId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  // musicId   Int?
+
+  youtubeId String?
+
+  // date 로 하니까 getDate 랑 헷갈림.
+  dateTime Int
+}
+
+// 해시태그 혹은 감정 뭐 이런거
+// 근데 음악 일기인데 해시테그나 감정이 들어가는게 좋을라나?
+
+// model Music {
+//   id     Int     @id @default(autoincrement())
+//   title  String
+//   author String
+//   url    String
+//   diary  Diary[]
+// }
+
+// calendar 용 테이블. Y=year, m=month, [{date:1,id:2,title:"우왕"},{date:3,id:45,title:"뀨뀨"}] 이런 식으로 들어갈 예정
+// 만약에 23년 이후 출시면 얘도 걍 빼 + BeforeY22 를 BeforeY23 으로
+model Y22 {
+  id     Int   @id @default(autoincrement())
+  m1     Json?
+  m2     Json?
+  m3     Json?
+  m4     Json?
+  m5     Json?
+  m6     Json?
+  m7     Json?
+  m8     Json?
+  m9     Json?
+  m10    Json?
+  m11    Json?
+  m12    Json?
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId Int   @unique
+}
+
+model Y23 {
+  id     Int   @id @default(autoincrement())
+  m1     Json?
+  m2     Json?
+  m3     Json?
+  m4     Json?
+  m5     Json?
+  m6     Json?
+  m7     Json?
+  m8     Json?
+  m9     Json?
+  m10    Json?
+  m11    Json?
+  m12    Json?
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId Int   @unique
+}
+
+// 23년 지나면 또 추가
+
+// [{2014:[{date:1,id:2,title:"우왕"},{date:3,id:45,title:"뀨뀨"}]}] 이런 식으로 들어갈 예정
+model BeforeY22 {
+  id     Int   @id @default(autoincrement())
+  m1     Json?
+  m2     Json?
+  m3     Json?
+  m4     Json?
+  m5     Json?
+  m6     Json?
+  m7     Json?
+  m8     Json?
+  m9     Json?
+  m10    Json?
+  m11    Json?
+  m12    Json?
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId Int   @unique
+}
